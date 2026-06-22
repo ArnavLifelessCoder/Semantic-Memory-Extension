@@ -1,0 +1,51 @@
+# =============================================================================
+# Semantic Memory — .gitignore
+# =============================================================================
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# --- Node ---
+node_modules/
+extension/node_modules/
+extension/dist/
+*.tsbuildinfo
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- ML models (downloaded at runtime) ---
+extension/public/models/*.onnx
+
+# --- Build artifacts ---
+*.zip
+*.tar.gz
+
+# --- Logs ---
+*.log
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
