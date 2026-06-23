@@ -3,7 +3,7 @@
 > A Chrome extension that indexes everything you browse using local ML embeddings and lets you query your history semantically — entirely on-device, zero data leaves the browser.
 
 <p align="center">
-  <strong>🧠 Search by meaning, not keywords</strong> · <strong>🔒 100% on-device by default</strong> · <strong>☁️ Optional encrypted sync</strong>
+  <strong> Search by meaning, not keywords</strong> · <strong> 100% on-device by default</strong> · <strong> Optional encrypted sync</strong>
 </p>
 
 ---
@@ -47,9 +47,9 @@ Query is embedded → ANN search → ranked results with similarity scores
 Everything above runs **entirely in your browser**. No servers, no API calls, no data leaves your machine.
 
 The **optional backend** adds:
-- 🔄 Cross-device sync (end-to-end encrypted — server sees only opaque blobs)
-- 🎯 Cross-encoder re-ranking for precision boost
-- 📊 Topic clustering + knowledge graph (UMAP + k-means)
+-  Cross-device sync (end-to-end encrypted — server sees only opaque blobs)
+-  Cross-encoder re-ranking for precision boost
+-  Topic clustering + knowledge graph (UMAP + k-means)
 
 ---
 
@@ -59,14 +59,14 @@ The popup is organised into four tabs, all powered by on-device ML:
 
 | Feature | What it does |
 |---|---|
-| 🔍 **Semantic Search** | Natural-language search over your history with per-result similarity scores. Matching query terms are **highlighted** in titles and previews, and results are **deduplicated by page** (best-scoring chunk wins). |
-| ⚡ **Quick Summary** | One-click extractive summary + key points of the page you're currently on (centroid-based sentence ranking). |
-| 🔗 **Find Similar** | Surfaces related pages from your history based on the current page's content. |
-| 📅 **Timeline** | Your browsing history grouped by day, filterable by today / week / month / all. |
-| 📊 **Analytics** | Total pages, chunks, domains, reading time, and a top-domains breakdown. |
-| ⚙️ **Settings** | Domain blacklist (skip indexing), opt-in encrypted sync config, and data **export / clear**. |
-| 🖱️ **Context menu** | Right-click selected text → "Search Semantic Memory" (opens the popup pre-filled). |
-| ⌨️ **Shortcut** | `Ctrl+Shift+S` (`Cmd+Shift+S` on macOS) opens the popup. |
+|  **Semantic Search** | Natural-language search over your history with per-result similarity scores. Matching query terms are **highlighted** in titles and previews, and results are **deduplicated by page** (best-scoring chunk wins). |
+|  **Quick Summary** | One-click extractive summary + key points of the page you're currently on (centroid-based sentence ranking). |
+|  **Find Similar** | Surfaces related pages from your history based on the current page's content. |
+|  **Timeline** | Your browsing history grouped by day, filterable by today / week / month / all. |
+|  **Analytics** | Total pages, chunks, domains, reading time, and a top-domains breakdown. |
+|  **Settings** | Domain blacklist (skip indexing), opt-in encrypted sync config, and data **export / clear**. |
+|  **Context menu** | Right-click selected text → "Search Semantic Memory" (opens the popup pre-filled). |
+|  **Shortcut** | `Ctrl+Shift+S` (`Cmd+Shift+S` on macOS) opens the popup. |
 
 Recent searches, animated stats, and a live "index active" indicator round out the UI.
 
