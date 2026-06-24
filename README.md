@@ -7,6 +7,7 @@
 </p>
 
 ---
+Link to the Extension - https://addons.mozilla.org/en-US/firefox/addon/semantic-memory-of-browsing/
 
 ## Table of Contents
 
