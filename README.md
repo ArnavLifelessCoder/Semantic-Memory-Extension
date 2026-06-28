@@ -1,6 +1,6 @@
-# Semantic Memory — Privacy-First Semantic Browser History
+# Semantic Memory - Privacy-First Semantic Browser History
 
-> A Chrome extension that indexes everything you browse using local ML embeddings and lets you query your history semantically — entirely on-device, zero data leaves the browser.
+> A Chrome extension that indexes everything you browse using local ML embeddings and lets you query your history semantically - entirely on-device, zero data leaves the browser.
 
 <p align="center">
   <strong> Search by meaning, not keywords</strong> · <strong> 100% on-device by default</strong> · <strong> Optional encrypted sync</strong>
