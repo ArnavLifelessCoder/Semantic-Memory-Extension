@@ -48,7 +48,7 @@ Query is embedded → ANN search → ranked results with similarity scores
 Everything above runs **entirely in your browser**. No servers, no API calls, no data leaves your machine.
 
 The **optional backend** adds:
--  Cross-device sync (end-to-end encrypted — server sees only opaque blobs)
+-  Cross-device sync (end-to-end encrypted - server sees only opaque blobs)
 -  Cross-encoder re-ranking for precision boost
 -  Topic clustering + knowledge graph (UMAP + k-means)
 
@@ -188,7 +188,7 @@ semantic-memory-extension/
 
 ---
 
-## Quick Start — Extension Only (Offline)
+## Quick Start - Extension Only (Offline)
 
 This gets you a fully working semantic search over your browsing history, entirely on-device.
 
@@ -237,7 +237,7 @@ Then load the `extension/` root folder (not `dist/`) in Chrome. CRXJS handles li
 
 ---
 
-## Quick Start — With Backend (Sync + Re-ranking)
+## Quick Start - With Backend (Sync + Re-ranking)
 
 ### Option A: Docker Compose (recommended)
 
