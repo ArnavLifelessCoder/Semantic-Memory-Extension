@@ -8,12 +8,18 @@ import { SimilarPages } from './components/SimilarPages';
 import { TimelineTab } from './tabs/TimelineTab';
 import { AnalyticsTab } from './tabs/AnalyticsTab';
 import { SettingsTab } from './tabs/SettingsTab';
+import { MapTab } from './tabs/MapTab';
 import { Icon, type IconName } from './Icon';
-import { search as engineSearch, indexCurrentPage } from './engine';
-import { addRecentSearch } from './storage';
-import type { EnrichedResult } from '../types';
+import {
+  search as engineSearch, indexCurrentPage, deletePageFromIndex,
+  isQuestion, answerFromResults, type AskResult,
+} from './engine';
+import { addRecentSearch, getSettings } from './storage';
+import { applyTheme } from './theme';
+import type { EnrichedResult, SearchRange } from '../types';
+import browser from 'webextension-polyfill';
 
-type Tab = 'search' | 'timeline' | 'analytics' | 'settings';
+type Tab = 'search' | 'map' | 'timeline' | 'analytics' | 'settings';
 
 /**
  * Search returns one hit per chunk, so the same page can appear several times.
@@ -33,9 +39,17 @@ function dedupeByPage(results: EnrichedResult[]): EnrichedResult[] {
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'search', label: 'Search', icon: 'search' },
-  { id: 'timeline', label: 'Timeline', icon: 'calendar' },
-  { id: 'analytics', label: 'Analytics', icon: 'chart' },
+  { id: 'map', label: 'Map', icon: 'map' },
+  { id: 'timeline', label: 'History', icon: 'calendar' },
+  { id: 'analytics', label: 'Stats', icon: 'chart' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
+];
+
+const RANGES: { id: SearchRange; label: string }[] = [
+  { id: 'all', label: 'All time' },
+  { id: 'today', label: 'Today' },
+  { id: 'week', label: 'Week' },
+  { id: 'month', label: 'Month' },
 ];
 
 export default function App() {
@@ -48,31 +62,51 @@ export default function App() {
   const [hasSearched, setHasSearched] = useState(false);
   const [status, setStatus] = useState('');
   const [statsKey, setStatsKey] = useState(0);
+  const [range, setRange] = useState<SearchRange>('all');
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [answer, setAnswer] = useState<AskResult | null>(null);
+  const [answerLoading, setAnswerLoading] = useState(false);
   const reqId = useRef(0);
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
 
-  // Guarantee the current page is captured when the popup opens.
+  // Apply saved theme, then guarantee the current page is captured.
   useEffect(() => {
+    void getSettings().then((s) => applyTheme(s.theme));
     void indexCurrentPage().then((n) => { if (n > 0) setStatsKey((k) => k + 1); });
   }, []);
 
-  const handleSearch = useCallback(async (searchQuery: string) => {
+  const handleSearch = useCallback(async (searchQuery: string, searchRange?: SearchRange) => {
     if (!searchQuery.trim()) return;
     const myReq = ++reqId.current;
     setLoading(true);
     setError(null);
     setResults([]);
+    setSelectedIndex(-1);
     setHasSearched(true);
     setLastQuery(searchQuery);
+    setAnswer(null);
+    setAnswerLoading(false);
     void addRecentSearch(searchQuery);
     setStatus('');
 
     try {
       const hits = await engineSearch(searchQuery, (done, total) => {
         if (myReq === reqId.current && done < total) setStatus(`Indexing pages… ${done}/${total}`);
-      });
+      }, { range: searchRange ?? rangeRef.current });
       if (myReq !== reqId.current) return; // a newer search superseded this one
       setStatus('');
-      setResults(dedupeByPage(hits));
+      const deduped = dedupeByPage(hits);
+      setResults(deduped);
+
+      // Question-shaped queries also get a synthesized answer (async, after results show).
+      if (isQuestion(searchQuery) && deduped.length > 0) {
+        setAnswerLoading(true);
+        void answerFromResults(searchQuery, deduped)
+          .then((a) => { if (myReq === reqId.current) setAnswer(a); })
+          .catch(() => { /* answer is best-effort */ })
+          .finally(() => { if (myReq === reqId.current) setAnswerLoading(false); });
+      }
     } catch (err) {
       if (myReq !== reqId.current) return;
       console.error('[App] search failed:', err);
@@ -86,7 +120,54 @@ export default function App() {
     setResults([]);
     setError(null);
     setHasSearched(false);
+    setSelectedIndex(-1);
+    setAnswer(null);
+    setAnswerLoading(false);
   }, []);
+
+  const handleRangeChange = useCallback((r: SearchRange) => {
+    setRange(r);
+    if (lastQuery) void handleSearch(lastQuery, r);
+  }, [lastQuery, handleSearch]);
+
+  const handleDeleteResult = useCallback(async (r: EnrichedResult) => {
+    try {
+      await deletePageFromIndex(r.metadata.pageId);
+      setResults((prev) => prev.filter((x) => x.metadata.pageId !== r.metadata.pageId));
+      setStatsKey((k) => k + 1);
+    } catch (err) {
+      console.error('[App] delete failed:', err);
+    }
+  }, []);
+
+  // Keyboard navigation over search results (↑/↓ select, Enter opens).
+  useEffect(() => {
+    if (activeTab !== 'search' || results.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.min(i + 1, results.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.max(i - 1, -1));
+      } else if (e.key === 'Enter' && selectedIndex >= 0) {
+        // Capture phase + stopPropagation so the search input's Enter handler
+        // doesn't also re-run the search.
+        e.preventDefault();
+        e.stopPropagation();
+        const r = results[selectedIndex];
+        if (r) void browser.tabs.create({ url: r.metadata.url });
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [activeTab, results, selectedIndex]);
+
+  // Keep the selected card in view.
+  useEffect(() => {
+    if (selectedIndex < 0) return;
+    document.getElementById(`result-${selectedIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
 
   return (
     <div style={{
@@ -159,6 +240,23 @@ export default function App() {
               loading={loading}
             />
 
+            {/* Time-range filter */}
+            {hasSearched && (
+              <div className="flex gap-xs animate-fade-in" role="group" aria-label="Filter results by time">
+                {RANGES.map((r) => (
+                  <button
+                    key={r.id}
+                    className={`chip ${range === r.id ? 'active' : ''}`}
+                    style={{ flex: 1, justifyContent: 'center', border: 'none', fontFamily: 'inherit' }}
+                    onClick={() => handleRangeChange(r.id)}
+                    disabled={loading}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Quick actions (when not searching) */}
             {!loading && !hasSearched && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -200,6 +298,43 @@ export default function App() {
               </div>
             )}
 
+            {/* Ask My Memory — synthesized answer for question queries */}
+            {!loading && (answerLoading || answer) && (
+              <div className="glass-card animate-fade-in" style={{ padding: '12px 14px' }}>
+                <div className="flex items-center gap-xs" style={{ marginBottom: '8px' }}>
+                  <Icon name="sparkle" size={14} style={{ color: 'var(--accent)' }} />
+                  <span className="font-semibold" style={{ fontSize: '12px' }}>
+                    {answerLoading ? 'Composing answer…' : 'Answer from your memory'}
+                  </span>
+                </div>
+                {answerLoading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div className="shimmer" style={{ height: 11, width: '100%' }} />
+                    <div className="shimmer" style={{ height: 11, width: '72%' }} />
+                  </div>
+                ) : answer && (
+                  <>
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '8px' }}>
+                      {answer.answer}
+                    </p>
+                    <div className="flex gap-xs" style={{ flexWrap: 'wrap' }}>
+                      {answer.sources.map((s) => (
+                        <span
+                          key={s.url}
+                          className="chip"
+                          style={{ fontSize: '10px' }}
+                          onClick={() => void browser.tabs.create({ url: s.url })}
+                          title={s.title}
+                        >
+                          <Icon name="external" size={10} /> {s.domain || s.title}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Results */}
             {!loading && results.length > 0 && (
               <div>
@@ -213,7 +348,14 @@ export default function App() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {results.map((r, i) => (
-                    <ResultCard key={`${r.id as unknown as number}-${i}`} result={r} index={i} query={lastQuery} />
+                    <ResultCard
+                      key={`${r.id as unknown as number}-${i}`}
+                      result={r}
+                      index={i}
+                      query={lastQuery}
+                      selected={i === selectedIndex}
+                      onDelete={() => void handleDeleteResult(r)}
+                    />
                   ))}
                 </div>
               </div>
@@ -257,6 +399,9 @@ export default function App() {
             )}
           </>
         )}
+
+        {/* Memory Map Tab */}
+        {activeTab === 'map' && <MapTab />}
 
         {/* Timeline Tab */}
         {activeTab === 'timeline' && <TimelineTab />}

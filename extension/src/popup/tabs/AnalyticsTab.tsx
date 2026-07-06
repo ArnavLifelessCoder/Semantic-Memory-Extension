@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Icon, type IconName } from '../Icon';
+import { Favicon } from '../components/Favicon';
 import { metadataStore } from '../../store/metadata-store';
 import type { BrowsingStats, DomainStat } from '../../types';
 
@@ -16,12 +17,7 @@ function StatCard({ value, label, icon }: { value: string | number; label: strin
 function DomainBar({ domain, percentage }: { domain: DomainStat; percentage: number }) {
   return (
     <div className="domain-bar">
-      <img
-        src={domain.favicon ?? `https://${domain.domain}/favicon.ico`}
-        alt=""
-        style={{ width: 14, height: 14, borderRadius: 2, flexShrink: 0 }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-      />
+      <Favicon src={domain.favicon} domain={domain.domain} size={14} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: '3px' }}>
           <span className="truncate text-xs font-medium" style={{ maxWidth: '200px' }}>
@@ -114,45 +110,42 @@ export function AnalyticsTab() {
         </div>
       )}
 
-      {/* Activity sparkline concept */}
+      {/* Last-7-days activity (real per-day counts) */}
       <div className="glass-card" style={{ padding: '12px' }}>
-        <div className="text-xs font-semibold" style={{ color: 'var(--text-accent)', marginBottom: '8px' }}>
-          Activity Overview
+        <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
+          <span className="text-xs font-semibold" style={{ color: 'var(--text-accent)' }}>
+            Last 7 Days
+          </span>
+          <span className="text-xs text-muted">{stats.weekCount} pages</span>
         </div>
-        <div className="flex items-center justify-between gap-sm">
-          <div style={{ flex: 1 }}>
-            <div className="text-xs text-muted" style={{ marginBottom: '4px' }}>
-              This week vs last
-            </div>
-            <div className="flex items-center gap-xs">
-              <span className="font-bold" style={{ fontSize: '18px', color: 'var(--text-primary)' }}>
-                {stats.weekCount}
-              </span>
-              <span className="badge badge-success" style={{ fontSize: '10px' }}>
-                active
-              </span>
-            </div>
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'flex-end', gap: '2px', height: '32px',
-          }}>
-            {/* Simple bar chart visualization */}
-            {[
-              stats.monthCount > 0 ? Math.max(20, (stats.weekCount / stats.monthCount) * 100 * 0.3) : 20,
-              stats.monthCount > 0 ? Math.max(20, (stats.weekCount / stats.monthCount) * 100 * 0.5) : 30,
-              stats.monthCount > 0 ? Math.max(20, (stats.weekCount / stats.monthCount) * 100 * 0.7) : 50,
-              stats.monthCount > 0 ? Math.max(20, (stats.weekCount / stats.monthCount) * 100 * 0.8) : 65,
-              stats.monthCount > 0 ? Math.max(25, (stats.todayCount / Math.max(1, stats.weekCount)) * 100) : 80,
-            ].map((h, i) => (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '48px' }}>
+          {stats.dailyCounts.map((count, i) => {
+            const max = Math.max(1, ...stats.dailyCounts);
+            const day = new Date(Date.now() - (6 - i) * 86_400_000);
+            const label = day.toLocaleDateString('en-US', { weekday: 'short' });
+            return (
+              <div
+                key={i}
+                className={`activity-bar ${i === 6 ? 'today' : ''}`}
+                style={{ height: `${Math.max(4, (count / max) * 100)}%` }}
+                title={`${label}: ${count} page${count !== 1 ? 's' : ''}`}
+              />
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+          {stats.dailyCounts.map((_, i) => {
+            const day = new Date(Date.now() - (6 - i) * 86_400_000);
+            return (
               <div key={i} style={{
-                width: '8px',
-                height: `${Math.min(100, h)}%`,
-                borderRadius: '2px',
-                background: i === 4 ? 'var(--gradient-accent)' : 'var(--bg-glass-hover)',
-                transition: 'height 0.5s ease',
-              }} />
-            ))}
-          </div>
+                flex: 1, textAlign: 'center', fontSize: '9px',
+                color: i === 6 ? 'var(--text-accent)' : 'var(--text-tertiary)',
+                fontWeight: i === 6 ? 600 : 400,
+              }}>
+                {day.toLocaleDateString('en-US', { weekday: 'narrow' })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

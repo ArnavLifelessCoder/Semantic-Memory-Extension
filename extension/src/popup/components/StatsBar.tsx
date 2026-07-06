@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../Icon';
 import { metadataStore } from '../../store/metadata-store';
+import { getSettings } from '../storage';
 import type { BrowsingStats } from '../../types';
 
 function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
@@ -31,10 +32,12 @@ function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string
 
 export function StatsBar({ refreshKey = 0 }: { refreshKey?: number }) {
   const [stats, setStats] = useState<BrowsingStats | null>(null);
+  const [indexing, setIndexing] = useState(true);
 
   useEffect(() => {
     let alive = true;
     void metadataStore.getStats().then((s) => { if (alive) setStats(s); }).catch(() => {});
+    void getSettings().then((s) => { if (alive) setIndexing(s.indexingEnabled); }).catch(() => {});
     return () => { alive = false; };
   }, [refreshKey]);
 
@@ -76,14 +79,14 @@ export function StatsBar({ refreshKey = 0 }: { refreshKey?: number }) {
           <AnimatedNumber value={stats.totalChunks} />
         </span>
       </div>
-      <div className="flex items-center gap-xs" style={{ color: 'var(--success)' }}>
+      <div className="flex items-center gap-xs" style={{ color: indexing ? 'var(--success)' : 'var(--warning)' }}>
         <span style={{
           width: 6, height: 6, borderRadius: '50%',
-          background: 'var(--success)',
+          background: indexing ? 'var(--success)' : 'var(--warning)',
           display: 'inline-block',
-          animation: 'pulse 2s ease-in-out infinite',
+          animation: indexing ? 'pulse 2s ease-in-out infinite' : 'none',
         }} />
-        <span style={{ fontSize: '10px' }}>Index active</span>
+        <span style={{ fontSize: '10px' }}>{indexing ? 'Index active' : 'Indexing paused'}</span>
       </div>
     </div>
   );

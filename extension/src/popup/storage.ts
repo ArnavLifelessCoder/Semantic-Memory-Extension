@@ -4,7 +4,9 @@ import browser from 'webextension-polyfill';
 export async function getSettings(): Promise<ExtensionSettings> {
   try {
     const r = await browser.storage.local.get('settings');
-    return (r['settings'] as ExtensionSettings | undefined) ?? DEFAULT_SETTINGS;
+    const stored = r['settings'] as Partial<ExtensionSettings> | undefined;
+    // Merge with defaults so settings added in newer versions are always present.
+    return { ...DEFAULT_SETTINGS, ...stored };
   } catch {
     return DEFAULT_SETTINGS;
   }

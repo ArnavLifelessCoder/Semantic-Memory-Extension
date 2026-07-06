@@ -70,6 +70,57 @@
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 360ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 420ms cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --on-accent: #0b0c12;
+  --glow-opacity: 0.08;
+  color-scheme: dark;
+}
+
+/* --- Light theme --- */
+:root[data-theme='light'] {
+  --bg-primary: #f7f8fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f2f3f7;
+  --bg-glass: rgba(15, 20, 40, 0.045);
+  --bg-glass-hover: rgba(15, 20, 40, 0.08);
+  --bg-input: rgba(15, 20, 40, 0.045);
+  --bg-input-focus: #ffffff;
+
+  --border-subtle: rgba(15, 20, 40, 0.1);
+  --border-medium: rgba(15, 20, 40, 0.18);
+  --border-focus: rgba(88, 101, 220, 0.55);
+
+  --text-primary: #1a1d27;
+  --text-secondary: #4d5464;
+  --text-tertiary: #8a90a0;
+  --text-accent: #4c59c9;
+
+  --accent: #5865dc;
+  --accent-hover: #4c59c9;
+  --accent-soft: rgba(88, 101, 220, 0.12);
+  --accent-start: #5865dc;
+  --accent-mid: #6a5fd4;
+  --accent-end: #7d64d0;
+
+  --success: #14915f;
+  --success-bg: rgba(20, 145, 95, 0.1);
+  --warning: #9a7415;
+  --warning-bg: rgba(154, 116, 21, 0.1);
+  --error: #cc3d3a;
+  --error-bg: rgba(204, 61, 58, 0.09);
+  --info: #2472c8;
+  --info-bg: rgba(36, 114, 200, 0.09);
+
+  --shadow-sm: 0 1px 2px rgba(20, 24, 40, 0.08);
+  --shadow-md: 0 4px 16px rgba(20, 24, 40, 0.1);
+  --shadow-lg: 0 12px 40px rgba(20, 24, 40, 0.14);
+  --shadow-glow: 0 0 0 3px var(--accent-soft);
+  --shadow-glow-strong: 0 0 0 3px rgba(88, 101, 220, 0.2);
+
+  --on-accent: #ffffff;
+  --glow-opacity: 0.05;
+  color-scheme: light;
 }
 
 *, *::before, *::after {
@@ -103,7 +154,8 @@ body::before {
   transform: translateX(-50%);
   width: 420px;
   height: 360px;
-  background: radial-gradient(ellipse at center, rgba(124, 138, 255, 0.08) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, var(--accent-soft) 0%, transparent 70%);
+  opacity: var(--glow-opacity);
   pointer-events: none;
   z-index: 0;
 }
@@ -112,10 +164,10 @@ body::before {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--border-subtle);
   border-radius: var(--radius-full);
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-medium); }
 
 /* Icon sizing helper */
 .icon { display: inline-flex; flex-shrink: 0; }
@@ -167,7 +219,7 @@ body::before {
 
 .btn-primary {
   background: var(--accent);
-  color: #0b0c12;
+  color: var(--on-accent);
   font-weight: 650;
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
@@ -546,7 +598,7 @@ mark.hl {
   border-radius: 50%;
   transition: transform var(--transition-spring), background var(--transition-base);
 }
-.toggle.active::after { transform: translateX(16px); background: #0b0c12; }
+.toggle.active::after { transform: translateX(16px); background: var(--on-accent); }
 
 /* --- Alerts --- */
 .alert {
@@ -560,6 +612,39 @@ mark.hl {
 .alert-error { background: var(--error-bg); border: 1px solid rgba(240, 114, 111, 0.22); color: var(--error); }
 .alert-success { background: var(--success-bg); border: 1px solid rgba(62, 207, 142, 0.22); color: var(--success); }
 .alert-info { background: var(--info-bg); border: 1px solid rgba(89, 164, 245, 0.22); color: var(--info); }
+
+/* --- Keyboard-selected result --- */
+.glass-card.result-selected {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-glow);
+}
+
+/* --- Favicon letter fallback --- */
+.favicon-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--text-accent);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* --- Activity chart --- */
+.activity-bar {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  opacity: 0.35;
+  transition: height var(--transition-slow), opacity var(--transition-fast);
+  min-height: 2px;
+}
+.activity-bar.today { opacity: 1; }
+.activity-bar:hover { opacity: 0.8; }
 
 /* --- Utilities --- */
 .flex { display: flex; }

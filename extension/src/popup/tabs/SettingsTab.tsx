@@ -1,29 +1,29 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icon } from '../Icon';
 import { getSettings, saveSettings } from '../storage';
 import { metadataStore } from '../../store/metadata-store';
-import { resetIndex } from '../engine';
-import type { ExtensionSettings } from '../../types';
+import { resetIndex, pruneNoisePages } from '../engine';
+import { applyTheme } from '../theme';
+import { DEFAULT_SETTINGS, type ExtensionSettings } from '../../types';
 
-function Toggle({ active, onChange }: { active: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ active, onChange, label }: { active: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <div
+    <button
       className={`toggle ${active ? 'active' : ''}`}
       onClick={() => onChange(!active)}
       role="switch"
       aria-checked={active}
+      aria-label={label}
+      style={{ padding: 0 }}
     />
   );
 }
 
-const DEFAULT_SETTINGS: ExtensionSettings = {
-  theme: 'dark',
-  blacklistedDomains: [],
-  syncEnabled: false,
-  syncApiUrl: '',
-  syncToken: '',
-  globalShortcut: 'Ctrl+Shift+S',
-};
+const THEMES: { id: ExtensionSettings['theme']; label: string }[] = [
+  { id: 'dark', label: 'Dark' },
+  { id: 'light', label: 'Light' },
+  { id: 'auto', label: 'Auto' },
+];
 
 export function SettingsTab() {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
@@ -32,6 +32,7 @@ export function SettingsTab() {
   const [newDomain, setNewDomain] = useState('');
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [clearConfirm, setClearConfirm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load settings
   useEffect(() => {
@@ -50,6 +51,40 @@ export function SettingsTab() {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }, [settings]);
+
+  // Theme applies instantly and persists immediately.
+  const handleTheme = useCallback((theme: ExtensionSettings['theme']) => {
+    applyTheme(theme);
+    setSettings(prev => {
+      const next = { ...prev, theme };
+      void saveSettings(next);
+      return next;
+    });
+  }, []);
+
+  // Pause/resume indexing persists immediately (the content script reads it live).
+  const handleIndexingToggle = useCallback((enabled: boolean) => {
+    setSettings(prev => {
+      const next = { ...prev, indexingEnabled: enabled };
+      void saveSettings(next);
+      return next;
+    });
+  }, []);
+
+  // Import a backup produced by Export
+  const handleImport = useCallback(async (file: File) => {
+    setExportStatus('Importing…');
+    try {
+      const text = await file.text();
+      const count = await metadataStore.importAll(text);
+      await resetIndex();
+      setExportStatus(`Imported ${count} pages`);
+    } catch (err) {
+      console.error('[Settings] import failed:', err);
+      setExportStatus('Import failed — not a valid backup file');
+    }
+    setTimeout(() => setExportStatus(null), 4000);
+  }, []);
 
   // Add blacklisted domain
   const addDomain = useCallback(() => {
@@ -85,6 +120,19 @@ export function SettingsTab() {
       setExportStatus(`Exported ${count} pages`);
     } catch {
       setExportStatus('Export failed');
+    }
+    setTimeout(() => setExportStatus(null), 3000);
+  }, []);
+
+  // Remove indexed noise pages (SERPs, chat app shells, webmail)
+  const handlePruneNoise = useCallback(async () => {
+    setExportStatus('Cleaning…');
+    try {
+      const removed = await pruneNoisePages();
+      setExportStatus(removed > 0 ? `Removed ${removed} noise page${removed !== 1 ? 's' : ''}` : 'No noise pages found');
+    } catch (err) {
+      console.error('[Settings] prune failed:', err);
+      setExportStatus('Cleanup failed');
     }
     setTimeout(() => setExportStatus(null), 3000);
   }, []);
@@ -125,6 +173,53 @@ export function SettingsTab() {
           {exportStatus}
         </div>
       )}
+
+      {/* Appearance */}
+      <div style={{ padding: '4px 0' }}>
+        <div className="flex items-center gap-xs text-xs font-semibold text-accent" style={{ padding: '4px 12px 8px' }}>
+          <Icon name="sparkle" size={13} /> Appearance
+        </div>
+        <div className="setting-row">
+          <div>
+            <div className="setting-label">Theme</div>
+            <div className="setting-description">Auto follows your system preference</div>
+          </div>
+          <div className="flex gap-xs" role="group" aria-label="Theme">
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                className={`chip ${settings.theme === t.id ? 'active' : ''}`}
+                style={{ border: 'none', fontFamily: 'inherit' }}
+                onClick={() => handleTheme(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="separator" />
+
+      {/* Indexing */}
+      <div style={{ padding: '4px 0' }}>
+        <div className="flex items-center gap-xs text-xs font-semibold text-accent" style={{ padding: '4px 12px 8px' }}>
+          <Icon name="bolt" size={13} /> Indexing
+        </div>
+        <div className="setting-row">
+          <div>
+            <div className="setting-label">Index pages as you browse</div>
+            <div className="setting-description">Pause to stop capturing new pages temporarily</div>
+          </div>
+          <Toggle
+            active={settings.indexingEnabled}
+            onChange={handleIndexingToggle}
+            label="Index pages as you browse"
+          />
+        </div>
+      </div>
+
+      <div className="separator" />
 
       {/* Domain Blacklist */}
       <div style={{ padding: '4px 0' }}>
@@ -176,6 +271,7 @@ export function SettingsTab() {
           <Toggle
             active={settings.syncEnabled}
             onChange={(v) => setSettings(prev => ({ ...prev, syncEnabled: v }))}
+            label="Enable sync"
           />
         </div>
         {settings.syncEnabled && (
@@ -206,10 +302,34 @@ export function SettingsTab() {
         <div className="flex items-center gap-xs text-xs font-semibold text-accent" style={{ padding: '4px 12px 8px' }}>
           <Icon name="database" size={13} /> Data Management
         </div>
+        <div className="setting-row" style={{ paddingTop: 0, paddingBottom: '8px' }}>
+          <div>
+            <div className="setting-label">Clean up noise pages</div>
+            <div className="setting-description">Remove indexed search-result pages, chat apps and webmail</div>
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ gap: '5px', flexShrink: 0 }} onClick={() => void handlePruneNoise()}>
+            <Icon name="sparkle" size={13} /> Clean
+          </button>
+        </div>
         <div className="flex gap-sm" style={{ padding: '0 12px' }}>
           <button className="btn btn-ghost btn-sm flex-1" style={{ gap: '5px' }} onClick={handleExport}>
             <Icon name="download" size={13} /> Export
           </button>
+          <button className="btn btn-ghost btn-sm flex-1" style={{ gap: '5px' }} onClick={() => fileInputRef.current?.click()}>
+            <Icon name="plus" size={13} /> Import
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            aria-hidden="true"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleImport(file);
+              e.target.value = '';
+            }}
+          />
           {!clearConfirm ? (
             <button className="btn btn-danger btn-sm flex-1" style={{ gap: '5px' }} onClick={() => setClearConfirm(true)}>
               <Icon name="trash" size={13} /> Clear all
@@ -234,7 +354,7 @@ export function SettingsTab() {
 
       {/* Footer */}
       <div className="text-xs text-muted" style={{ textAlign: 'center', padding: '4px' }}>
-        Semantic Memory v2.0 · 100% On-Device AI
+        Semantic Memory v2.2 · 100% On-Device AI · Tip: type “mem” in the address bar
       </div>
     </div>
   );

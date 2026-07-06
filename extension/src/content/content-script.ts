@@ -1,19 +1,23 @@
 import { Readability } from '@mozilla/readability';
 import { ArticleSchema } from './content-schema';
 import { chunkText } from './chunker';
+import { shouldIndexUrl } from './url-filter';
 import { toRawText, toPageId } from '../types';
 import type { RuntimeMessage, ExtensionSettings } from '../types';
 import browser from 'webextension-polyfill';
 
 // --- Domain blacklist ---
 
-async function getBlacklistedDomains(): Promise<string[]> {
+async function getIndexingSettings(): Promise<{ blacklist: string[]; enabled: boolean }> {
   try {
     const result = await browser.storage.local.get('settings');
-    const settings = result['settings'] as ExtensionSettings | undefined;
-    return settings?.blacklistedDomains ?? [];
+    const settings = result['settings'] as Partial<ExtensionSettings> | undefined;
+    return {
+      blacklist: settings?.blacklistedDomains ?? [],
+      enabled: settings?.indexingEnabled !== false,
+    };
   } catch {
-    return [];
+    return { blacklist: [], enabled: true };
   }
 }
 
@@ -47,10 +51,14 @@ function extractPageContent(): void {
   // Skip chrome:// pages and other non-http pages
   if (!location.href.startsWith('http')) return;
 
-  // Check blacklist asynchronously, then proceed
-  getBlacklistedDomains().then(blacklist => {
-    if (blacklist.some(d => domain.includes(d))) {
-      console.debug('[SemanticMemory] skipping blacklisted domain:', domain);
+  // Check settings asynchronously, then proceed
+  getIndexingSettings().then(({ blacklist, enabled }) => {
+    if (!enabled) {
+      console.debug('[SemanticMemory] indexing paused — skipping page');
+      return;
+    }
+    if (!shouldIndexUrl(location.href, blacklist)) {
+      console.debug('[SemanticMemory] skipping noise/blacklisted page:', domain);
       return;
     }
 

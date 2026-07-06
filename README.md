@@ -1,9 +1,13 @@
 # Semantic Memory - Privacy-First Semantic Browser History
 
-> A Chrome extension that indexes everything you browse using local ML embeddings and lets you query your history semantically - entirely on-device, zero data leaves the browser.
+> A cross-browser extension that indexes everything you browse using local ML embeddings and lets you query your history semantically — entirely on-device, zero data leaves the browser.
 
 <p align="center">
   <strong> Search by meaning, not keywords</strong> · <strong> 100% on-device by default</strong> · <strong> Optional encrypted sync</strong>
+</p>
+
+<p align="center">
+  Works on <strong>Chrome, Edge, Brave</strong> and <strong>Firefox</strong> (Manifest V3).
 </p>
 
 ---
@@ -32,17 +36,17 @@ Link to the Extension - https://addons.mozilla.org/en-US/firefox/addon/semantic-
 ```
 You browse the web
        ↓
-Content script extracts clean text (Readability.js)
+Content script extracts clean text (Readability.js) — noise pages (SERPs, chat apps, webmail) are skipped
        ↓
 Text is chunked (512 tokens, 64 overlap)
        ↓
 Chunks are embedded in-browser (MiniLM-L6-v2, ONNX int8, ~23ms/chunk)
        ↓
-Embeddings stored in an in-memory vector index + IndexedDB (persisted)
+Embeddings stored in an in-memory vector index + IndexedDB (persisted); re-visited URLs upsert instead of duplicating
        ↓
 You search from the popup: "that article about transformers"
        ↓
-Query is embedded → ANN search → ranked results with similarity scores
+Query is embedded → cosine search → hybrid re-ranking (semantic + keyword + title + recency) → results
 ```
 
 Everything above runs **entirely in your browser**. No servers, no API calls, no data leaves your machine.
@@ -56,20 +60,23 @@ The **optional backend** adds:
 
 ## Features
 
-The popup is organised into four tabs, all powered by on-device ML:
+The popup is organised into five tabs, all powered by on-device ML:
 
 | Feature | What it does |
 |---|---|
-|  **Semantic Search** | Natural-language search over your history with per-result similarity scores. Matching query terms are **highlighted** in titles and previews, and results are **deduplicated by page** (best-scoring chunk wins). |
-|  **Quick Summary** | One-click extractive summary + key points of the page you're currently on (centroid-based sentence ranking). |
-|  **Find Similar** | Surfaces related pages from your history based on the current page's content. |
-|  **Timeline** | Your browsing history grouped by day, filterable by today / week / month / all. |
-|  **Analytics** | Total pages, chunks, domains, reading time, and a top-domains breakdown. |
-|  **Settings** | Domain blacklist (skip indexing), opt-in encrypted sync config, and data **export / clear**. |
-|  **Context menu** | Right-click selected text → "Search Semantic Memory" (opens the popup pre-filled). |
-|  **Shortcut** | `Ctrl+Shift+S` (`Cmd+Shift+S` on macOS) opens the popup. |
+| 🔍 **Semantic Search** | Natural-language search over your history with a **hybrid ranker** (semantic similarity + keyword coverage + title match + recency). A relative cutoff drops the low-relevance tail, matching terms are **highlighted**, and results are **deduplicated by page**. Filter by time range (all / today / week / month) and navigate with **↑/↓ + Enter**. |
+| 🧠 **Ask My Memory** | Ask a question (anything ending in `?`) and get a **synthesized answer** extracted from across all your indexed pages, with **clickable source citations**. Fully extractive and on-device — no LLM calls. |
+| 🗺️ **Memory Map** | An interactive 2D map of your whole knowledge space: every page is embedded, **PCA-projected** to 2D and **k-means clustered** into topics. Nearby dots are semantically related — hover for details, click to open, colour-coded by cluster with a domain legend. |
+| ⚡ **Quick Summary** | One-click extractive summary + key points of the page you're currently on (centroid-based sentence ranking). |
+| 🔗 **Find Similar** | Surfaces related pages from your history based on the current page's content. |
+| 📅 **History (Timeline)** | Your browsing grouped by day, filterable by today / week / month / all, with a quick title/domain filter, per-page **delete**, and visit counts. |
+| 📊 **Stats (Analytics)** | Total pages, chunks, domains, reading time, top-domains breakdown, and a **real last-7-days activity chart**. |
+| ⚙️ **Settings** | Light / dark / **auto theme**, **pause indexing**, domain blacklist, **clean up noise pages**, **export / import** full backups, opt-in encrypted sync config, and clear-all. |
+| 🔤 **Omnibox** | Type `mem <query>` in the address bar to search your memory without opening the popup (Chrome + Firefox). |
+| 🖱️ **Context menu** | Right-click selected text → "Search Semantic Memory" (opens the popup pre-filled). |
+| ⌨️ **Shortcut** | `Ctrl+Shift+S` (`Cmd+Shift+S` on macOS) opens the popup. |
 
-Recent searches, animated stats, and a live "index active" indicator round out the UI.
+Recent searches, animated stats, a live index status indicator (active / paused), and a privacy-safe local favicon fallback round out the UI.
 
 ---
 
@@ -77,8 +84,10 @@ Recent searches, animated stats, and a live "index active" indicator round out t
 
 | Layer | Technology |
 |---|---|
-| Extension | Manifest V3, TypeScript, React, Vite |
+| Extension | Manifest V3, TypeScript, React, Vite, CRXJS |
+| Cross-browser | `webextension-polyfill` (Chrome/Edge/Brave + Firefox) |
 | ML (in-browser) | Transformers.js, MiniLM-L6-v2 (int8 ONNX), pure-JS cosine vector search |
+| Analysis (in-browser) | PCA (power iteration) + k-means for the Memory Map, extractive QA for Ask My Memory |
 | Validation | Zod (DOM boundary), branded types (compile-time safety) |
 | Persistence | IndexedDB |
 | Backend | FastAPI, Python 3.12 |
@@ -97,41 +106,47 @@ Recent searches, animated stats, and a live "index active" indicator round out t
 ```
 semantic-memory-extension/
 ├── extension/                        # Chrome extension (client)
-│   ├── manifest.json                 # MV3 manifest
+│   ├── manifest.json                 # MV3 manifest (Chrome)
 │   ├── popup.html                    # Popup entry HTML
 │   ├── package.json                  # Node dependencies
 │   ├── vite.config.ts                # Vite + CRXJS config
 │   ├── tsconfig.json                 # Strict TypeScript config
+│   ├── scripts/
+│   │   └── patch-manifest.mjs        # Emits dist/manifest.firefox.json after build
 │   ├── public/
 │   │   ├── icons/                    # Extension icons (16/48/128)
 │   │   └── models/                   # ONNX model weights (auto-downloaded)
 │   └── src/
 │       ├── background/
-│       │   ├── service-worker.ts     # Thin router + context menu + badge
-│       │   ├── offscreen.ts          # ML inference + HNSW + IndexedDB (offscreen doc)
-│       │   └── embedding-worker.ts   # MiniLM inference (Web Worker)
+│       │   └── service-worker.ts     # Indexer (upsert) + context menu + omnibox
 │       ├── content/
 │       │   ├── content-script.ts     # DOM scraper + Readability
 │       │   ├── content-schema.ts     # Zod validation
-│       │   └── chunker.ts           # Sentence-window chunking
+│       │   ├── url-filter.ts         # Skips noise pages (SERPs, chat apps, webmail)
+│       │   └── chunker.ts            # Sentence-window chunking
 │       ├── popup/
 │       │   ├── main.tsx             # React entrypoint (createRoot)
-│       │   ├── App.tsx              # Popup root + tab nav + result dedup
+│       │   ├── App.tsx              # Popup root + tab nav + Ask My Memory + kbd nav
+│       │   ├── engine.ts            # Embedding, hybrid search, QA, PCA/k-means map
+│       │   ├── theme.ts             # Light/dark/auto theme application
+│       │   ├── storage.ts           # Settings + recent searches
 │       │   ├── SearchBar.tsx        # Query input + recent searches
-│       │   ├── ResultCard.tsx       # Result card + query-term highlighting
-│       │   ├── styles.css           # Dark glassmorphism design system
+│       │   ├── ResultCard.tsx       # Result card + highlighting + delete
+│       │   ├── styles.css           # Design system (dark + light themes)
 │       │   ├── components/
-│       │   │   ├── StatsBar.tsx     # Live index stats (animated)
+│       │   │   ├── StatsBar.tsx     # Live index stats + active/paused status
+│       │   │   ├── Favicon.tsx      # Privacy-safe favicon with letter fallback
 │       │   │   ├── QuickSummary.tsx # Extractive summary of current page
 │       │   │   └── SimilarPages.tsx # "Find similar" from history
 │       │   └── tabs/
-│       │       ├── TimelineTab.tsx  # Browsing history by day
-│       │       ├── AnalyticsTab.tsx # Stats + top domains
-│       │       └── SettingsTab.tsx  # Blacklist, sync, export/clear
+│       │       ├── MapTab.tsx       # Interactive 2D Memory Map (canvas)
+│       │       ├── TimelineTab.tsx  # Browsing history by day + filter + delete
+│       │       ├── AnalyticsTab.tsx # Stats + top domains + 7-day chart
+│       │       └── SettingsTab.tsx  # Theme, pause, blacklist, clean, export/import
 │       ├── store/
-│       │   ├── vector-store.ts      # hnswlib-wasm wrapper
+│       │   ├── vector-store.ts      # In-memory brute-force cosine index
 │       │   ├── metadata-store.ts    # IndexedDB persistence (singleton)
-│       │   ├── idb-adapter.ts       # IDB facade
+│       │   ├── chunk-id.ts          # Deterministic chunk id encoding
 │       │   └── sync-client.ts       # E2E encrypted sync client
 │       └── types/
 │           ├── index.ts             # Branded types + message unions
@@ -205,15 +220,23 @@ npm install
 npm run build
 ```
 
-This compiles TypeScript and bundles everything into the `dist/` folder.
+This compiles TypeScript and bundles everything into the `dist/` folder. The build emits two manifests:
+- `dist/manifest.json` — Chrome/Edge/Brave (uses `background.service_worker`)
+- `dist/manifest.firefox.json` — Firefox (uses `background.scripts` + the required add-on id)
 
-### 3. Load into Chrome
+### 3a. Load into Chrome / Edge / Brave
 
-1. Open Chrome and go to `chrome://extensions/`
+1. Open `chrome://extensions/`
 2. Enable **Developer mode** (toggle in the top-right)
 3. Click **Load unpacked**
 4. Select the `extension/dist` folder
 5. The Semantic Memory icon appears in your toolbar
+
+### 3b. Load into Firefox
+
+1. In `extension/dist`, replace `manifest.json` with the contents of `manifest.firefox.json`
+2. Open `about:debugging` → **This Firefox** → **Load Temporary Add-on…**
+3. Select the `dist/manifest.json` file
 
 ### 4. Use it
 
@@ -458,8 +481,10 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for full production deployment guides cover
 |---|---|
 | Popup is blank | Make sure you loaded `dist/` (built) not `extension/` root. Run `npm run build` first. |
 | "Model loading" takes forever | First load downloads ~23MB. Check your network. Subsequent loads use browser cache. |
-| Search returns nothing | Browse at least one page first to build the index (search works even with very few chunks indexed). Check the offscreen/service-worker console for errors. |
-| Service worker keeps restarting | This is normal MV3 behavior. The keep-alive ping handles it. |
+| Search returns nothing | Browse at least one page first to build the index (search works even with very few chunks indexed). Check the popup console for errors. |
+| `'background.scripts' requires manifest version of 2 or lower` | You loaded the Firefox manifest in Chrome. Use `dist/manifest.json` for Chrome; only swap in `manifest.firefox.json` for Firefox. |
+| Old search-result / chat pages clutter results | Open **Settings → Clean up noise pages**, or delete individual pages with the trash button on any result or timeline row. |
+| Memory Map says "not enough pages" | The map needs at least 3 pages with embeddings. Browse a bit more, then reopen the tab. |
 
 ### Backend
 

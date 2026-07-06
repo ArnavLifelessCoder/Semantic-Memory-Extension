@@ -122,6 +122,12 @@ export class MetadataStore {
     return result?.pageId as unknown as PageId | undefined;
   }
 
+  async getAllChunkPageMap(): Promise<{ chunkId: number; pageId: number }[]> {
+    const db = await openDB();
+    const tx = db.transaction(CHUNK_PAGE_MAP_STORE, 'readonly');
+    return promisify(tx.objectStore(CHUNK_PAGE_MAP_STORE).getAll());
+  }
+
   async getAllEmbeddings(): Promise<StoredEmbedding[]> {
     const db = await openDB();
     const tx = db.transaction(EMBEDDING_STORE, 'readonly');
@@ -178,7 +184,37 @@ export class MetadataStore {
     return enriched;
   }
 
-  // --- New methods for revolutionary features ---
+  /** Find an already-indexed page by exact URL (used to upsert on re-visits). */
+  async getPageByUrl(url: string): Promise<PageMetadata | undefined> {
+    const all = await this.getAllMetadata();
+    return all.find((p) => p.url === url);
+  }
+
+  /**
+   * Remove a page and everything derived from it (chunks, embeddings, chunk→page
+   * map). Returns the removed chunk ids so callers can drop them from any
+   * in-memory vector index.
+   */
+  async deletePage(pageId: PageId): Promise<ChunkId[]> {
+    const db = await openDB();
+    const mapTx = db.transaction(CHUNK_PAGE_MAP_STORE, 'readonly');
+    const allMaps = await promisify<{ chunkId: number; pageId: number }[]>(
+      mapTx.objectStore(CHUNK_PAGE_MAP_STORE).getAll()
+    );
+    const chunkIds = allMaps
+      .filter((m) => m.pageId === (pageId as unknown as number))
+      .map((m) => m.chunkId);
+
+    const tx = db.transaction([METADATA_STORE, CHUNK_STORE, EMBEDDING_STORE, CHUNK_PAGE_MAP_STORE], 'readwrite');
+    tx.objectStore(METADATA_STORE).delete(pageId as unknown as number);
+    for (const id of chunkIds) {
+      tx.objectStore(CHUNK_STORE).delete(id);
+      tx.objectStore(EMBEDDING_STORE).delete(id);
+      tx.objectStore(CHUNK_PAGE_MAP_STORE).delete(id);
+    }
+    await txDone(tx);
+    return chunkIds as unknown as ChunkId[];
+  }
 
   async getAllMetadata(): Promise<PageMetadata[]> {
     const db = await openDB();
@@ -223,6 +259,14 @@ export class MetadataStore {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
+    // Real per-day activity for the last 7 days (oldest → newest).
+    const dailyCounts = new Array<number>(7).fill(0);
+    const dayMs = 86_400_000;
+    for (const page of allPages) {
+      const dayIndex = Math.floor((page.timestamp - todayStart.getTime()) / dayMs) + 6;
+      if (dayIndex >= 0 && dayIndex <= 6) dailyCounts[dayIndex] = (dailyCounts[dayIndex] ?? 0) + 1;
+    }
+
     return {
       totalPages: allPages.length,
       totalChunks,
@@ -232,6 +276,7 @@ export class MetadataStore {
       weekCount: allPages.filter(p => p.timestamp >= weekStart.getTime()).length,
       monthCount: allPages.filter(p => p.timestamp >= monthStart.getTime()).length,
       estimatedReadingMinutes: Math.round(totalReadingTime),
+      dailyCounts,
     };
   }
 
@@ -271,21 +316,54 @@ export class MetadataStore {
     return Array.from(dateMap.entries()).map(([date, pages]) => ({ date, pages }));
   }
 
+  /** Full backup: pages, chunk texts, chunk→page map and embeddings. */
   async exportAll(): Promise<{ json: string; count: number }> {
-    const allPages = await this.getAllMetadata();
-    const allEmbeddings = await this.getAllEmbeddings();
+    const db = await openDB();
+    const tx = db.transaction([METADATA_STORE, CHUNK_STORE, CHUNK_PAGE_MAP_STORE, EMBEDDING_STORE], 'readonly');
+    const [pages, chunks, chunkPageMap, embeddings] = await Promise.all([
+      promisify<PageMetadata[]>(tx.objectStore(METADATA_STORE).getAll()),
+      promisify<{ chunkId: number; chunkText: string }[]>(tx.objectStore(CHUNK_STORE).getAll()),
+      promisify<{ chunkId: number; pageId: number }[]>(tx.objectStore(CHUNK_PAGE_MAP_STORE).getAll()),
+      promisify<StoredEmbedding[]>(tx.objectStore(EMBEDDING_STORE).getAll()),
+    ]);
 
     const exportData = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
-      pages: allPages,
-      embeddingCount: allEmbeddings.length,
+      pages,
+      chunks,
+      chunkPageMap,
+      embeddings,
     };
 
     return {
-      json: JSON.stringify(exportData, null, 2),
-      count: allPages.length,
+      json: JSON.stringify(exportData),
+      count: pages.length,
     };
+  }
+
+  /**
+   * Restore a backup produced by exportAll(). Existing entries with the same
+   * ids are overwritten; everything else is kept. Returns imported page count.
+   */
+  async importAll(json: string): Promise<number> {
+    const data = JSON.parse(json) as {
+      version?: number;
+      pages?: PageMetadata[];
+      chunks?: { chunkId: number; chunkText: string }[];
+      chunkPageMap?: { chunkId: number; pageId: number }[];
+      embeddings?: StoredEmbedding[];
+    };
+    if (!Array.isArray(data.pages)) throw new Error('Invalid backup file: missing pages');
+
+    const db = await openDB();
+    const tx = db.transaction([METADATA_STORE, CHUNK_STORE, CHUNK_PAGE_MAP_STORE, EMBEDDING_STORE], 'readwrite');
+    for (const p of data.pages) tx.objectStore(METADATA_STORE).put(p);
+    for (const c of data.chunks ?? []) tx.objectStore(CHUNK_STORE).put(c);
+    for (const m of data.chunkPageMap ?? []) tx.objectStore(CHUNK_PAGE_MAP_STORE).put(m);
+    for (const e of data.embeddings ?? []) tx.objectStore(EMBEDDING_STORE).put(e);
+    await txDone(tx);
+    return data.pages.length;
   }
 
   async clearAll(): Promise<void> {

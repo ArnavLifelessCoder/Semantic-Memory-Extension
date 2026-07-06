@@ -41,6 +41,11 @@ export class VectorStore<T extends Indexable = Indexable> {
     this.addEmbedding(item.id, item.embedding);
   }
 
+  /** Drop specific vectors (e.g. after a page is deleted). */
+  removeMany(ids: ChunkId[]): void {
+    for (const id of ids) this.vectors.delete(id as unknown as number);
+  }
+
   search(queryVector: Embedding, k = 20): SearchResult[] {
     if (this.vectors.size === 0) return [];
     try {

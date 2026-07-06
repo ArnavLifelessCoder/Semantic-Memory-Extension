@@ -27,7 +27,8 @@ export type IconName =
   | 'ban'
   | 'database'
   | 'retry'
-  | 'bolt';
+  | 'bolt'
+  | 'map';
 
 interface IconProps {
   name: IconName;
@@ -159,6 +160,15 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />,
+  map: (
+    <>
+      <circle cx="6" cy="7" r="2.5" />
+      <circle cx="17.5" cy="5.5" r="2.5" />
+      <circle cx="7.5" cy="17.5" r="2.5" />
+      <circle cx="17" cy="15.5" r="2.5" />
+      <path d="M8.4 8.3l6.8-2M6.4 9.4l.8 5.7M9.9 16.8l4.7-.9" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 16, className, style, strokeWidth = 1.8 }: IconProps) {

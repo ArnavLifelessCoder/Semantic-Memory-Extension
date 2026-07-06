@@ -1,11 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import { Icon } from './Icon';
+import { Favicon } from './components/Favicon';
 import type { EnrichedResult } from '../types';
+import browser from 'webextension-polyfill';
 
 interface ResultCardProps {
   result: EnrichedResult;
   index: number;
   query?: string;
+  selected?: boolean;
+  onDelete?: () => void;
 }
 
 const STOP_WORDS = new Set([
@@ -67,7 +71,7 @@ function getDomain(url: string): string {
   }
 }
 
-export function ResultCard({ result, index, query }: ResultCardProps) {
+export function ResultCard({ result, index, query, selected = false, onDelete }: ResultCardProps) {
   const [hovered, setHovered] = useState(false);
   const similarityPct = Math.round(result.score * 100);
   const domain = result.metadata.domain ?? getDomain(result.metadata.url);
@@ -77,30 +81,22 @@ export function ResultCard({ result, index, query }: ResultCardProps) {
 
   return (
     <div
-      className="glass-card"
+      className={`glass-card ${selected ? 'result-selected' : ''}`}
       style={{
         padding: '12px 14px',
         cursor: 'pointer',
         animation: `fadeIn var(--transition-base) ease-out ${index * 60}ms both`,
         transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
-        boxShadow: hovered ? 'var(--shadow-md)' : 'none',
+        boxShadow: hovered ? 'var(--shadow-md)' : undefined,
       }}
-      onClick={() => void chrome.tabs.create({ url: result.metadata.url })}
+      onClick={() => void browser.tabs.create({ url: result.metadata.url })}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       id={`result-${index}`}
     >
       {/* Header: favicon + title + score */}
       <div className="flex items-center gap-sm" style={{ marginBottom: '6px' }}>
-        <img
-          src={result.metadata.favicon ?? `https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
-          alt=""
-          style={{
-            width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-            opacity: 0.9,
-          }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
+        <Favicon src={result.metadata.favicon} domain={domain} size={16} />
         <div className="truncate font-semibold" style={{ flex: 1, fontSize: '12.5px' }}>
           {highlight(result.metadata.title, query)}
         </div>
@@ -150,6 +146,7 @@ export function ResultCard({ result, index, query }: ResultCardProps) {
                 void navigator.clipboard.writeText(result.metadata.url);
               }}
               title="Copy link"
+              aria-label="Copy link"
             >
               <Icon name="copy" size={13} />
             </button>
@@ -158,12 +155,27 @@ export function ResultCard({ result, index, query }: ResultCardProps) {
               style={{ padding: '4px' }}
               onClick={(e) => {
                 e.stopPropagation();
-                void chrome.tabs.create({ url: result.metadata.url });
+                void browser.tabs.create({ url: result.metadata.url });
               }}
               title="Open in new tab"
+              aria-label="Open in new tab"
             >
               <Icon name="external" size={13} />
             </button>
+            {onDelete && (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '4px', color: 'var(--error)' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                title="Remove from index"
+                aria-label="Remove from index"
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            )}
           </div>
         )}
       </div>

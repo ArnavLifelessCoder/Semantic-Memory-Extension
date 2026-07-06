@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from 'react';
 import { Icon } from './Icon';
 import { getRecentSearches } from './storage';
+import browser from 'webextension-polyfill';
 
 interface SearchBarProps {
   query: string;
@@ -23,17 +24,20 @@ export function SearchBar({ query, onQueryChange, onSearch, onClear, loading }: 
     return () => { alive = false; };
   }, []);
 
-  // Check for pending search (from context menu)
+  // Check for pending search (from context menu) — once, on mount.
+  const pendingChecked = useRef(false);
   useEffect(() => {
-    chrome.storage.local.get('pendingSearch').then(result => {
+    if (pendingChecked.current) return;
+    pendingChecked.current = true;
+    void browser.storage.local.get('pendingSearch').then(result => {
       const pending = result['pendingSearch'] as string | undefined;
       if (pending) {
         onQueryChange(pending);
         onSearch(pending);
-        void chrome.storage.local.remove('pendingSearch');
+        void browser.storage.local.remove('pendingSearch');
       }
     });
-  }, []);
+  }, [onQueryChange, onSearch]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -104,6 +108,7 @@ export function SearchBar({ query, onQueryChange, onSearch, onClear, loading }: 
           {query && !loading && (
             <button
               onClick={() => { onClear(); inputRef.current?.focus(); }}
+              aria-label="Clear search"
               style={{
                 position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
                 background: 'none', border: 'none', color: 'var(--text-tertiary)',

@@ -1,25 +1,30 @@
 /**
- * Post-build manifest patch for Firefox compatibility.
+ * Post-build manifest handling for cross-browser support.
  *
- * The @crxjs/vite-plugin emits a Chrome-only manifest:
- *   - it drops the `background.scripts` key (Firefox MV3 fallback)
- *   - it never adds an add-on id (`browser_specific_settings.gecko.id`),
- *     which Firefox requires for MV3.
+ * Chrome MV3 and Firefox MV3 need slightly different manifests:
+ *   - Chrome uses `background.service_worker`; a `background.scripts` key makes
+ *     it warn "'background.scripts' requires manifest version of 2 or lower".
+ *   - Firefox MV3 uses `background.scripts` and requires an add-on id
+ *     (`browser_specific_settings.gecko.id`).
  *
- * This script rewrites dist/manifest.json after the build so a single zip
- * validates and installs on both Chrome and Firefox.
+ * So dist/manifest.json stays Chrome-clean (exactly what the build emitted),
+ * and this script writes a Firefox variant to dist/manifest.firefox.json.
+ * To package for Firefox: replace manifest.json with manifest.firefox.json.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const manifestPath = resolve(__dirname, '../dist/manifest.json');
+const distDir = resolve(__dirname, '../dist');
 
-const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+const manifest = JSON.parse(readFileSync(resolve(distDir, 'manifest.json'), 'utf8'));
+
+// Build the Firefox variant from the Chrome manifest.
+const firefox = structuredClone(manifest);
 
 // 1) Firefox add-on id + data collection disclosure (both required for MV3).
-manifest.browser_specific_settings = {
+firefox.browser_specific_settings = {
   gecko: {
     id: 'semantic-memory@arnav.extension',
     strict_min_version: '121.0',
@@ -30,11 +35,11 @@ manifest.browser_specific_settings = {
   },
 };
 
-// 2) Background scripts fallback for Firefox (Chrome uses service_worker).
-const swEntry = manifest.background?.service_worker;
+// 2) Firefox MV3 runs the background as an event page via `scripts`.
+const swEntry = firefox.background?.service_worker;
 if (swEntry) {
-  manifest.background.scripts = [swEntry];
+  firefox.background = { scripts: [swEntry], type: 'module' };
 }
 
-writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-console.log('[patch-manifest] dist/manifest.json patched for Firefox compatibility');
+writeFileSync(resolve(distDir, 'manifest.firefox.json'), JSON.stringify(firefox, null, 2) + '\n', 'utf8');
+console.log('[patch-manifest] wrote dist/manifest.firefox.json (Chrome manifest left untouched)');

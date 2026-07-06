@@ -35,6 +35,7 @@ export interface PageMetadata {
   favicon?: string | undefined;
   readingTime?: number | undefined; // minutes
   domain?: string | undefined;
+  visitCount?: number | undefined;
 }
 
 // --- Settings ---
@@ -42,6 +43,7 @@ export interface PageMetadata {
 export interface ExtensionSettings {
   theme: 'dark' | 'light' | 'auto';
   blacklistedDomains: string[];
+  indexingEnabled: boolean;
   syncEnabled: boolean;
   syncApiUrl: string;
   syncToken: string;
@@ -51,11 +53,14 @@ export interface ExtensionSettings {
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   theme: 'dark',
   blacklistedDomains: [],
+  indexingEnabled: true,
   syncEnabled: false,
   syncApiUrl: '',
   syncToken: '',
   globalShortcut: 'Ctrl+Shift+S',
 };
+
+export type SearchRange = 'all' | 'today' | 'week' | 'month';
 
 // --- Statistics ---
 
@@ -79,6 +84,8 @@ export interface BrowsingStats {
   weekCount: number;
   monthCount: number;
   estimatedReadingMinutes: number;
+  /** Pages indexed per day for the last 7 days, oldest first. */
+  dailyCounts: number[];
 }
 
 // --- Runtime messages (expanded) ---

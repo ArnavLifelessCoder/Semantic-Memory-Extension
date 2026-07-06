@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Icon } from '../Icon';
+import { Favicon } from './Favicon';
 import { findSimilar } from '../engine';
 import type { EnrichedResult } from '../../types';
 import browser from 'webextension-polyfill';
@@ -121,12 +122,7 @@ export function SimilarPages() {
                 onClick={() => void browser.tabs.create({ url: r.metadata.url })}
                 style={{ padding: '8px', borderRadius: 'var(--radius-sm)' }}
               >
-                <img
-                  src={r.metadata.favicon ?? `${new URL(r.metadata.url).origin}/favicon.ico`}
-                  alt=""
-                  style={{ width: 14, height: 14, borderRadius: 2, flexShrink: 0 }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+                <Favicon src={r.metadata.favicon} domain={r.metadata.domain ?? new URL(r.metadata.url).hostname} size={14} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="truncate text-xs font-medium">{r.metadata.title}</div>
                   <div className="truncate" style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
