@@ -445,16 +445,28 @@ The extension uses strict TypeScript with several advanced patterns:
 
 ## Deployment
 
+### Packaging for the stores
+
+`npm run package` builds the extension and produces two **store-ready** zips in `dist/`, each with `manifest.json` at the **zip root** (both stores reject nested folders or the GitHub source zip with "manifest.json was not found"):
+
+```bash
+cd extension && npm run package
+# → dist/semantic-memory-chrome.zip   (background.service_worker)
+# → dist/semantic-memory-firefox.zip  (background.scripts + gecko id)
+```
+
 ### Extension → Chrome Web Store
 
-1. Build the production bundle:
-   ```bash
-   cd extension && npm run build
-   ```
-2. Zip the `dist/` folder
-3. Upload to the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-4. Fill in the listing details and privacy policy
-5. Submit for review
+1. Run `npm run package`
+2. Upload `dist/semantic-memory-chrome.zip` to the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+3. Fill in the listing details and privacy policy, then submit for review
+
+### Extension → Firefox Add-ons (AMO)
+
+1. Run `npm run package`
+2. Upload `dist/semantic-memory-firefox.zip` at [addons.mozilla.org](https://addons.mozilla.org/developers/)
+3. Because the bundle is minified, AMO will ask for **source code** — point reviewers at this repo with build steps `npm install && npm run build`
+4. Note for reviewers: the MiniLM model is fetched once from the Hugging Face CDN and cached; no user data is ever transmitted
 
 ### Backend → Production
 
